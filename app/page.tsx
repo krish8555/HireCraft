@@ -2,6 +2,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0; // Disable caching completely
 
 async function getJobs() {
   const { data, error } = await supabase
