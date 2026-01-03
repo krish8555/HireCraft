@@ -11,6 +11,5 @@ export default defineConfig({
   },
   datasource: {
     url: process.env["DIRECT_URL"], // Use DIRECT_URL for migrations
-    directUrl: process.env["DIRECT_URL"],
   },
 });
