@@ -1,59 +1,78 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 
 export default function AnalysisPage() {
-  const params = useParams()
-  const router = useRouter()
-  const applicationId = params.id as string
+  const params = useParams();
+  const router = useRouter();
+  const applicationId = params.id as string;
 
-  const [status, setStatus] = useState<'analyzing' | 'success' | 'rejected'>('analyzing')
-  const [analysis, setAnalysis] = useState<any>(null)
+  const [status, setStatus] = useState<"analyzing" | "success" | "rejected">(
+    "analyzing"
+  );
+  const [analysis, setAnalysis] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Simulate analysis process
-    setTimeout(() => {
-      checkAnalysisStatus()
-    }, 3000)
-  }, [])
+    analyzeResume();
+  }, []);
 
-  const checkAnalysisStatus = async () => {
+  const analyzeResume = async () => {
     try {
-      const response = await fetch(`/api/applications/${applicationId}`)
-      const data = await response.json()
+      // Start the analysis - this will take time
+      const response = await fetch("/api/analyze-resume", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ applicationId }),
+      });
 
-      if (data.jd_match_score >= 60) {
-        setStatus('success')
-        setAnalysis({
-          score: data.jd_match_score,
-          summary: `Great news! Your profile matches ${data.jd_match_score}% with our job requirements.`,
-        })
-      } else {
-        setStatus('rejected')
-        setAnalysis({
-          score: data.jd_match_score,
-          summary: `Thank you for applying. Unfortunately, your profile match score is ${data.jd_match_score}%, which is below our threshold.`,
-        })
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Analysis failed");
       }
-    } catch (error) {
-      console.error('Error checking status:', error)
-      setStatus('rejected')
+
+      // Check the results
+      if (data.matchAnalysis.matchScore >= 60) {
+        setStatus("success");
+        setAnalysis({
+          score: data.matchAnalysis.matchScore,
+          summary: `Great news! Your profile matches ${data.matchAnalysis.matchScore}% with our job requirements.`,
+        });
+      } else {
+        setStatus("rejected");
+        setAnalysis({
+          score: data.matchAnalysis.matchScore,
+          summary: `Thank you for applying. Unfortunately, your profile match score is ${data.matchAnalysis.matchScore}%, which is below our threshold.`,
+        });
+      }
+    } catch (error: any) {
+      console.error("Error analyzing resume:", error);
+      setError(error.message);
+      setStatus("rejected");
+      setAnalysis({
+        score: 0,
+        summary:
+          "We encountered an error analyzing your resume. Please try again later.",
+      });
     }
-  }
+  };
 
   const handleProceedToInterview = () => {
-    router.push(`/interview/${applicationId}`)
-  }
+    router.push(`/interview/${applicationId}`);
+  };
 
   const handleGoHome = () => {
-    router.push('/')
-  }
+    router.push("/");
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
       <div className="max-w-2xl w-full">
-        {status === 'analyzing' && (
+        {status === "analyzing" && (
           <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-12 border border-slate-700/50 text-center">
             <div className="mb-8">
               <div className="relative w-32 h-32 mx-auto">
@@ -67,8 +86,12 @@ export default function AnalysisPage() {
               </div>
             </div>
 
-            <h1 className="text-3xl font-bold text-white mb-4">Analyzing Your Profile...</h1>
-            <p className="text-slate-300 text-lg mb-2">Our AI is reviewing your resume</p>
+            <h1 className="text-3xl font-bold text-white mb-4">
+              Analyzing Your Profile...
+            </h1>
+            <p className="text-slate-300 text-lg mb-2">
+              Our AI is reviewing your resume
+            </p>
             <p className="text-slate-400">This will take just a moment</p>
 
             <div className="mt-8 flex items-center justify-center gap-2">
@@ -79,7 +102,7 @@ export default function AnalysisPage() {
           </div>
         )}
 
-        {status === 'success' && analysis && (
+        {status === "success" && analysis && (
           <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-12 border border-slate-700/50 text-center">
             <div className="mb-8">
               <div className="w-32 h-32 mx-auto bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-full flex items-center justify-center text-6xl">
@@ -87,8 +110,10 @@ export default function AnalysisPage() {
               </div>
             </div>
 
-            <h1 className="text-3xl font-bold text-white mb-4">You Look Great! 🎉</h1>
-            
+            <h1 className="text-3xl font-bold text-white mb-4">
+              You Look Great! 🎉
+            </h1>
+
             <div className="mb-8">
               <div className="text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-emerald-400 mb-2">
                 {analysis.score}%
@@ -101,9 +126,12 @@ export default function AnalysisPage() {
             </p>
 
             <div className="bg-gradient-to-r from-indigo-500/10 to-emerald-500/10 border border-indigo-500/20 rounded-xl p-6 mb-8">
-              <p className="text-white font-semibold mb-2">Would you like to proceed with an AI interview?</p>
+              <p className="text-white font-semibold mb-2">
+                Would you like to proceed with an AI interview?
+              </p>
               <p className="text-slate-400 text-sm">
-                Our AI interviewer will ask you 8 questions and provide real-time feedback
+                Our AI interviewer will ask you 8 questions and provide
+                real-time feedback
               </p>
             </div>
 
@@ -124,7 +152,7 @@ export default function AnalysisPage() {
           </div>
         )}
 
-        {status === 'rejected' && analysis && (
+        {status === "rejected" && analysis && (
           <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-12 border border-slate-700/50 text-center">
             <div className="mb-8">
               <div className="w-32 h-32 mx-auto bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center text-6xl">
@@ -132,8 +160,10 @@ export default function AnalysisPage() {
               </div>
             </div>
 
-            <h1 className="text-3xl font-bold text-white mb-4">Thank You for Applying</h1>
-            
+            <h1 className="text-3xl font-bold text-white mb-4">
+              Thank You for Applying
+            </h1>
+
             <div className="mb-8">
               <div className="text-6xl font-bold text-red-400 mb-2">
                 {analysis.score}%
@@ -147,15 +177,16 @@ export default function AnalysisPage() {
 
             <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 mb-8">
               <p className="text-slate-300 text-sm">
-                We appreciate your interest in this position. While your profile doesn't align with our current requirements,
-                we encourage you to apply for other opportunities that may be a better fit.
+                We appreciate your interest in this position. While your profile
+                doesn't align with our current requirements, we encourage you to
+                apply for other opportunities that may be a better fit.
               </p>
             </div>
 
             <button
               onClick={handleGoHome}
               className="w-full py-4 bg-gradient-to-r from-indigo-500 to-emerald-500 hover:from-indigo-600 hover:to-emerald-600 text-white font-semibold rounded-xl transition-all duration-200"
-              >
+            >
               View Other Jobs
             </button>
           </div>
@@ -182,5 +213,5 @@ export default function AnalysisPage() {
         }
       `}</style>
     </div>
-  )
+  );
 }

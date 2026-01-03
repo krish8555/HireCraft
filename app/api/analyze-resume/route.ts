@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import pdf from "pdf-parse/lib/pdf-parse";
 import { supabase } from "@/lib/supabase";
-import { analyzeResumeMatch } from "@/lib/gemini";
+import { analyzeResumeWithPDF } from "@/lib/gemini";
 
 export async function POST(request: NextRequest) {
   try {
@@ -51,13 +50,10 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await fileData.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Parse PDF
-    const pdfData = await pdf(buffer);
-    const resumeText = pdfData.text;
-
-    // Analyze match with Gemini
-    const matchAnalysis = await analyzeResumeMatch(
-      resumeText,
+    // Send PDF directly to Gemini for analysis
+    const matchAnalysis = await analyzeResumeWithPDF(
+      buffer,
+      resumeFileName!,
       application.job.description,
       application.job.title
     );
@@ -66,7 +62,7 @@ export async function POST(request: NextRequest) {
     const { error: updateError } = await supabase
       .from("applications")
       .update({
-        resume_text: resumeText,
+        resume_text: matchAnalysis.extractedText || "PDF content",
         jd_match_score: matchAnalysis.matchScore,
         interview_status:
           matchAnalysis.matchScore >= 60 ? "eligible" : "rejected",
@@ -82,7 +78,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({
-      resumeText,
+      resumeText: matchAnalysis.extractedText,
       matchAnalysis,
       eligible: matchAnalysis.matchScore >= 60,
     });

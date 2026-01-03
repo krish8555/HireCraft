@@ -34,7 +34,9 @@ export default function DashboardPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [applications, setApplications] = useState<Application[]>([]);
-  const [activeTab, setActiveTab] = useState<"all" | "interviewed" | "shortlisted">("interviewed");
+  const [activeTab, setActiveTab] = useState<
+    "all" | "interviewed" | "shortlisted"
+  >("interviewed");
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -177,10 +179,10 @@ export default function DashboardPage() {
   };
 
   const filteredApplications = applications.filter((app) =>
-    activeTab === "all" 
-      ? true 
+    activeTab === "all"
+      ? true
       : activeTab === "interviewed"
-      ? app.interview_status === 'completed'
+      ? app.interview_status === "completed"
       : app.shortlisted
   );
 
@@ -236,7 +238,12 @@ export default function DashboardPage() {
                     : "text-slate-400 hover:text-slate-300"
                 }`}
               >
-                Interviewed ({applications.filter((a) => a.interview_status === 'completed').length})
+                Interviewed (
+                {
+                  applications.filter((a) => a.interview_status === "completed")
+                    .length
+                }
+                )
               </button>
               <button
                 onClick={() => setActiveTab("shortlisted")}
@@ -317,10 +324,13 @@ export default function DashboardPage() {
                             </a>
                             {app.jd_match_score && (
                               <span className="text-sm text-slate-400">
-                                • Match Score: <span className="text-white font-semibold">{app.jd_match_score}%</span>
+                                • Match Score:{" "}
+                                <span className="text-white font-semibold">
+                                  {app.jd_match_score}%
+                                </span>
                               </span>
                             )}
-                            {app.interview_status === 'completed' && (
+                            {app.interview_status === "completed" && (
                               <span className="bg-purple-500/20 text-purple-400 text-xs px-3 py-1 rounded-full border border-purple-500/30">
                                 ✓ Interviewed
                               </span>
@@ -328,73 +338,115 @@ export default function DashboardPage() {
                           </div>
 
                           {/* Interview Transcript */}
-                          {app.interview_result && (() => {
-                            try {
-                              const result = JSON.parse(app.interview_result);
-                              const evaluation = result.evaluation;
-                              return (
-                                <div className="mt-4 bg-slate-900/50 rounded-lg p-4 border border-slate-600">
-                                  <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
-                                    🎤 Interview Results
-                                  </h4>
-                                  
-                                  <div className="grid grid-cols-4 gap-3 mb-4">
-                                    <div className="text-center">
-                                      <div className="text-2xl font-bold text-indigo-400">{evaluation.overallScore}</div>
-                                      <div className="text-xs text-slate-400">Overall</div>
-                                    </div>
-                                    <div className="text-center">
-                                      <div className="text-2xl font-bold text-purple-400">{evaluation.technicalScore}</div>
-                                      <div className="text-xs text-slate-400">Technical</div>
-                                    </div>
-                                    <div className="text-center">
-                                      <div className="text-2xl font-bold text-emerald-400">{evaluation.communicationScore}</div>
-                                      <div className="text-xs text-slate-400">Communication</div>
-                                    </div>
-                                    <div className="text-center">
-                                      <div className="text-2xl font-bold text-blue-400">{evaluation.cultureFitScore}</div>
-                                      <div className="text-xs text-slate-400">Culture Fit</div>
-                                    </div>
-                                  </div>
+                          {app.interview_result &&
+                            (() => {
+                              try {
+                                const result = JSON.parse(app.interview_result);
+                                const evaluation = result.evaluation;
+                                return (
+                                  <div className="mt-4 bg-slate-900/50 rounded-lg p-4 border border-slate-600">
+                                    <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+                                      🎤 Interview Results
+                                    </h4>
 
-                                  <div className="mb-3">
-                                    <span className="text-slate-400 text-sm">Decision:</span>
-                                    <span className={`ml-2 font-semibold ${evaluation.decision === 'selected' ? 'text-emerald-400' : 'text-red-400'}`}>
-                                      {evaluation.decision === 'selected' ? '✓ Selected' : '✗ Not Selected'}
-                                    </span>
-                                    {evaluation.decision === 'rejected' && !app.shortlisted && (
-                                      <button
-                                        onClick={() => moveToShortlisted(app.id)}
-                                        className="ml-3 text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded transition-colors"
-                                        title="Override decision - candidate shows potential"
-                                      >
-                                        ⚡ Move to Shortlisted
-                                      </button>
-                                    )}
-                                  </div>
-
-                                  <details className="text-sm">
-                                    <summary className="text-indigo-400 cursor-pointer hover:text-indigo-300 mb-2">
-                                      View Interview Transcript ({result.qa?.length || 0} Q&A)
-                                    </summary>
-                                    <div className="mt-2 space-y-3 max-h-96 overflow-y-auto">
-                                      {result.qa?.map((qa: any, i: number) => (
-                                        <div key={i} className="bg-slate-800/50 rounded p-3">
-                                          <div className="text-indigo-300 font-medium mb-1">Q{i+1}: {qa.question}</div>
-                                          <div className="text-slate-300 mb-1">A: {qa.answer}</div>
-                                          {qa.feedback && (
-                                            <div className="text-emerald-400 text-xs">💡 {qa.feedback}</div>
-                                          )}
+                                    <div className="grid grid-cols-4 gap-3 mb-4">
+                                      <div className="text-center">
+                                        <div className="text-2xl font-bold text-indigo-400">
+                                          {evaluation.overallScore}
                                         </div>
-                                      ))}
+                                        <div className="text-xs text-slate-400">
+                                          Overall
+                                        </div>
+                                      </div>
+                                      <div className="text-center">
+                                        <div className="text-2xl font-bold text-purple-400">
+                                          {evaluation.technicalScore}
+                                        </div>
+                                        <div className="text-xs text-slate-400">
+                                          Technical
+                                        </div>
+                                      </div>
+                                      <div className="text-center">
+                                        <div className="text-2xl font-bold text-emerald-400">
+                                          {evaluation.communicationScore}
+                                        </div>
+                                        <div className="text-xs text-slate-400">
+                                          Communication
+                                        </div>
+                                      </div>
+                                      <div className="text-center">
+                                        <div className="text-2xl font-bold text-blue-400">
+                                          {evaluation.cultureFitScore}
+                                        </div>
+                                        <div className="text-xs text-slate-400">
+                                          Culture Fit
+                                        </div>
+                                      </div>
                                     </div>
-                                  </details>
-                                </div>
-                              );
-                            } catch (e) {
-                              return null;
-                            }
-                          })()}
+
+                                    <div className="mb-3">
+                                      <span className="text-slate-400 text-sm">
+                                        Decision:
+                                      </span>
+                                      <span
+                                        className={`ml-2 font-semibold ${
+                                          evaluation.decision === "selected"
+                                            ? "text-emerald-400"
+                                            : "text-red-400"
+                                        }`}
+                                      >
+                                        {evaluation.decision === "selected"
+                                          ? "✓ Selected"
+                                          : "✗ Not Selected"}
+                                      </span>
+                                      {evaluation.decision === "rejected" &&
+                                        !app.shortlisted && (
+                                          <button
+                                            onClick={() =>
+                                              moveToShortlisted(app.id)
+                                            }
+                                            className="ml-3 text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded transition-colors"
+                                            title="Override decision - candidate shows potential"
+                                          >
+                                            ⚡ Move to Shortlisted
+                                          </button>
+                                        )}
+                                    </div>
+
+                                    <details className="text-sm">
+                                      <summary className="text-indigo-400 cursor-pointer hover:text-indigo-300 mb-2">
+                                        View Interview Transcript (
+                                        {result.qa?.length || 0} Q&A)
+                                      </summary>
+                                      <div className="mt-2 space-y-3 max-h-96 overflow-y-auto">
+                                        {result.qa?.map(
+                                          (qa: any, i: number) => (
+                                            <div
+                                              key={i}
+                                              className="bg-slate-800/50 rounded p-3"
+                                            >
+                                              <div className="text-indigo-300 font-medium mb-1">
+                                                Q{i + 1}: {qa.question}
+                                              </div>
+                                              <div className="text-slate-300 mb-1">
+                                                A: {qa.answer}
+                                              </div>
+                                              {qa.feedback && (
+                                                <div className="text-emerald-400 text-xs">
+                                                  💡 {qa.feedback}
+                                                </div>
+                                              )}
+                                            </div>
+                                          )
+                                        )}
+                                      </div>
+                                    </details>
+                                  </div>
+                                );
+                              } catch (e) {
+                                return null;
+                              }
+                            })()}
                         </div>
 
                         <button

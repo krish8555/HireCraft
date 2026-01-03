@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleAIFileManager } from "@google/generative-ai/server";
 
 // Dedicated API keys for specific tasks
 const API_KEYS = {
@@ -13,6 +14,106 @@ function getGeminiClient(task: "RESUME_PARSING" | "JD_MATCHING" | "INTERVIEW") {
     throw new Error(`No Gemini API key configured for task: ${task}`);
   }
   return new GoogleGenerativeAI(apiKey);
+}
+
+// New function to analyze PDF directly with Gemini
+export async function analyzeResumeWithPDF(
+  pdfBuffer: Buffer,
+  fileName: string,
+  jobDescription: string,
+  jobTitle: string
+) {
+  const apiKey = API_KEYS.JD_MATCHING;
+  const fileManager = new GoogleAIFileManager(apiKey);
+  const genAI = new GoogleGenerativeAI(apiKey);
+
+  // Write buffer to temporary file
+  const fs = require("fs");
+  const path = require("path");
+  const tmpDir = require("os").tmpdir();
+  const tmpFilePath = path.join(tmpDir, fileName);
+
+  fs.writeFileSync(tmpFilePath, pdfBuffer);
+
+  try {
+    // Upload PDF to Gemini
+    const uploadResponse = await fileManager.uploadFile(tmpFilePath, {
+      mimeType: "application/pdf",
+      displayName: fileName,
+    });
+
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+    });
+
+    const prompt = `You are an expert AI recruiter with 15+ years of experience in talent acquisition and candidate assessment.
+
+**POSITION:** ${jobTitle}
+
+**JOB REQUIREMENTS:**
+${jobDescription}
+
+**TASK:** Analyze the attached resume PDF and provide:
+
+1. **Extract Resume Content:** Parse all text from the PDF including education, experience, skills, projects, certifications
+2. **Educational Background Analysis:** Degrees, institutions, GPA, relevant coursework
+3. **Professional Experience Analysis:** Years, companies, roles, technologies, achievements
+4. **Technical Skills Assessment:** Languages, frameworks, tools, domain knowledge
+5. **Projects & Achievements:** Notable work, measurable impact
+6. **Career Trajectory:** Growth, stability, gaps
+7. **Overall Match Score (0-100):** Based on weighted criteria:
+   - Education: 20%
+   - Experience: 40%
+   - Skills: 25%
+   - Projects: 15%
+
+**Scoring Guide:**
+- 85-100: Outstanding match
+- 70-84: Strong match
+- 60-69: Good match
+- 45-59: Moderate match
+- Below 45: Not suitable
+
+Return JSON:
+{
+  "matchScore": <number 0-100>,
+  "extractedText": "<full resume text>",
+  "summary": "<2-3 sentence assessment>",
+  "strengths": ["strength1", "strength2", "strength3"],
+  "concerns": ["concern1", "concern2"],
+  "recommendation": "proceed" or "reject"
+}
+
+Only return valid JSON, no additional text.`;
+
+    const result = await model.generateContent([
+      {
+        fileData: {
+          mimeType: uploadResponse.file.mimeType,
+          fileUri: uploadResponse.file.uri,
+        },
+      },
+      { text: prompt },
+    ]);
+
+    const response = result.response.text();
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+
+    if (!jsonMatch) {
+      throw new Error("Failed to parse AI response");
+    }
+
+    // Clean up temp file
+    fs.unlinkSync(tmpFilePath);
+
+    return JSON.parse(jsonMatch[0]);
+  } catch (error) {
+    // Clean up temp file on error
+    if (fs.existsSync(tmpFilePath)) {
+      fs.unlinkSync(tmpFilePath);
+    }
+    throw error;
+  }
 }
 
 export async function analyzeResumeMatch(
@@ -201,20 +302,31 @@ ${previousContext}
 - No generic closing questions - every question should assess if they're the right fit
 
 **ADAPTIVE INTELLIGENCE:**
-- If they mentioned specific technologies → Ask about those
-- If they worked at notable companies → Reference that experience
-- If they have relevant projects → Dig deeper into implementation details
-- If previous answer was weak → Either probe deeper OR move to assess different competencies
-- If previous answer was strong → Increase technical complexity or ask follow-up scenarios
-- If they studied at a specific university → Connect that to the current role
+- If they mentioned specific technologies → Ask about those ACTUAL technologies from their resume
+- If they worked at notable companies → Reference those ACTUAL companies from their resume
+- If they have relevant projects → Dig into their ACTUAL projects mentioned in resume
+- If previous answer was WEAK or shows lack of knowledge → IMMEDIATELY SWITCH to a different topic/skill from their resume
+- If previous answer was STRONG → Increase complexity on the same topic OR move to next relevant skill
+- If they're struggling with a topic they listed on resume → Pivot to assess other competencies they claim to have
+- NEVER ask about generic examples - ONLY reference what's actually in their resume
 
-**EXAMPLE GOOD QUESTIONS:**
-- "I see you have 3 years of experience with React at TechCorp. Can you describe the most complex component architecture you've built and why you designed it that way?"
-- "Your resume mentions you improved application performance by 40% at your last job. Walk me through your approach to identifying and solving that bottleneck."
-- "You've got a CS degree from [University] and you've worked with both frontend and backend. For this full-stack role, where do you feel strongest, and why?"
+**CRITICAL RULES:**
+1. NO HARDCODED EXAMPLES - Every question must reference their actual resume content
+2. READ THEIR RESUME CAREFULLY - Use their actual universities, companies, projects, technologies
+3. IF THEY DON'T KNOW SOMETHING - Switch to a different skill/experience they listed
+4. ADAPTIVE TOPIC SWITCHING - Don't keep asking about one topic if they're weak on it
+5. VALIDATE RESUME CLAIMS - Ask about what THEY say they know, not generic examples
 
 **YOUR TASK NOW:**
-Generate ONE focused, natural question appropriate for question ${context.questionNumber}. Reference specific details from their resume when possible. Be conversational but professional.
+Generate ONE focused, natural question appropriate for question ${
+    context.questionNumber
+  }. 
+
+IMPORTANT: 
+- Reference ONLY specific details from THIS candidate's actual resume
+- If previous answers showed weakness on a topic, switch to a different skill/experience from their resume
+- Every question should feel personalized to THIS specific candidate
+- NO generic placeholders like "TechCorp", "React experience", etc. - use their REAL background
 
 Return ONLY the question text - no labels, no formatting, just the question.`;
 
