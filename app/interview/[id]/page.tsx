@@ -16,6 +16,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
   const [loading, setLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [interviewComplete, setInterviewComplete] = useState(false);
   const [evaluation, setEvaluation] = useState<any>(null);
 
@@ -77,7 +78,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
   };
 
   const speakQuestion = (text: string) => {
-    if ("speechSynthesis" in window) {
+    if ("speechSynthesis" in window && voiceEnabled) {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.onstart = () => setIsSpeaking(true);
       utterance.onend = () => setIsSpeaking(false);
@@ -85,6 +86,20 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
       utterance.pitch = 1;
       window.speechSynthesis.speak(utterance);
     }
+  };
+
+  const stopSpeaking = () => {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  };
+
+  const toggleVoice = () => {
+    if (voiceEnabled && isSpeaking) {
+      stopSpeaking();
+    }
+    setVoiceEnabled(!voiceEnabled);
   };
 
   const toggleListening = () => {
@@ -300,6 +315,16 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
           />
 
           <div className="flex gap-4 mt-6">
+            <button
+              onClick={toggleVoice}
+              className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
+                voiceEnabled
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  : "bg-slate-700 hover:bg-slate-600 text-slate-300"
+              }`}
+            >
+              {voiceEnabled ? "🔊 Voice On" : "🔇 Voice Off"}
+            </button>
             <button
               onClick={toggleListening}
               disabled={loading}
