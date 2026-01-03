@@ -104,13 +104,23 @@ Only return valid JSON, no additional text.`;
     }
 
     // Clean up temp file
-    fs.unlinkSync(tmpFilePath);
+    try {
+      if (fs.existsSync(tmpFilePath)) {
+        fs.unlinkSync(tmpFilePath);
+      }
+    } catch (cleanupError) {
+      console.error("Error cleaning up temp file:", cleanupError);
+    }
 
     return JSON.parse(jsonMatch[0]);
   } catch (error) {
     // Clean up temp file on error
-    if (fs.existsSync(tmpFilePath)) {
-      fs.unlinkSync(tmpFilePath);
+    try {
+      if (fs.existsSync(tmpFilePath)) {
+        fs.unlinkSync(tmpFilePath);
+      }
+    } catch (cleanupError) {
+      console.error("Error cleaning up temp file on error:", cleanupError);
     }
     throw error;
   }
