@@ -1,0 +1,50 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Job {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title        String
+  description  String
+  requirements String
+  location     String
+  type         String
+  salary_range String        @map("salary_range")
+  created_at   DateTime      @default(now()) @map("created_at")
+  applications Application[]
+
+  @@map("jobs")
+}
+
+model Application {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  job_id        String   @map("job_id") @db.Uuid
+  name          String
+  email         String
+  phone         String
+  current_ctc   String   @map("current_ctc")
+  expected_ctc  String   @map("expected_ctc")
+  resume_url    String   @map("resume_url")
+  shortlisted   Boolean  @default(false)
+  created_at    DateTime @default(now()) @map("created_at")
+  
+  job Job @relation(fields: [job_id], references: [id], onDelete: Cascade)
+
+  @@map("applications")
+}
+
+model Admin {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username   String   @unique
+  created_at DateTime @default(now()) @map("created_at")
+
+  @@map("admins")
+}
+
