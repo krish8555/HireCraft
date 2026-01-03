@@ -32,6 +32,10 @@ model Application {
   current_ctc   String   @map("current_ctc")
   expected_ctc  String   @map("expected_ctc")
   resume_url    String   @map("resume_url")
+  resume_text   String?  @map("resume_text")
+  jd_match_score Float?  @map("jd_match_score")
+  interview_status String? @map("interview_status") @default("pending")
+  interview_result String? @map("interview_result")
   shortlisted   Boolean  @default(false)
   created_at    DateTime @default(now()) @map("created_at")
   

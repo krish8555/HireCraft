@@ -138,8 +138,21 @@ export default function ApplyPage({ params }: { params: { id: string } }) {
       });
 
       if (response.ok) {
-        alert("Application submitted successfully!");
-        router.push("/");
+        const { application } = await response.json();
+
+        // Trigger resume analysis in background
+        fetch("/api/analyze-resume", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            applicationId: application.id,
+          }),
+        }).catch(console.error);
+
+        // Redirect to analysis page immediately
+        router.push(`/analysis/${application.id}`);
       } else {
         const errorData = await response.json();
         console.error("API error:", errorData);
