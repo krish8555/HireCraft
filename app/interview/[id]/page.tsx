@@ -17,10 +17,12 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [timeLeft, setTimeLeft] = useState(180); // 3 minutes = 180 seconds
   const [interviewComplete, setInterviewComplete] = useState(false);
   const [evaluation, setEvaluation] = useState<any>(null);
 
   const recognitionRef = useRef<any>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -51,8 +53,55 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
     getNextQuestion();
   }, []);
 
+  // Timer effect
+  useEffect(() => {
+    if (loading || interviewComplete) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      return;
+    }
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current!);
+          handleSubmitAnswer(); // Auto-submit when time runs out
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [loading, interviewComplete, questionNumber]);
+
+  const resetTimer = () => {
+    setTimeLeft(180); // Reset to 3 minutes
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getTimerColor = () => {
+    if (timeLeft > 120) return "text-emerald-400";
+    if (timeLeft > 60) return "text-yellow-400";
+    return "text-red-400";
+  };
+
   const getNextQuestion = async () => {
     setLoading(true);
+    resetTimer();
     try {
       const response = await fetch("/api/interview", {
         method: "POST",
@@ -138,6 +187,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
 
   const getNextQuestionWithHistory = async (history: QA[]) => {
     setLoading(true);
+    resetTimer();
     try {
       const response = await fetch("/api/interview", {
         method: "POST",
@@ -299,6 +349,16 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
               </h2>
             </div>
           </div>
+          
+          {/* Timer */}
+          {!loading && (
+            <div className="mt-4 flex items-center gap-3">
+              <span className="text-slate-400 text-sm">Time Left:</span>
+              <span className={`text-2xl font-bold ${getTimerColor()}`}>
+                ⏱️ {formatTime(timeLeft)}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Answer Input */}
