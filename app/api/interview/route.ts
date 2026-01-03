@@ -69,12 +69,18 @@ export async function POST(request: NextRequest) {
         allQA: allQA || [],
       });
 
+      // Save both Q&A history and evaluation in interview_result
+      const interviewResult = {
+        qa: allQA || [],
+        evaluation: evaluation,
+      };
+
       // Update application with interview results
       await supabase
         .from("applications")
         .update({
           interview_status: "completed",
-          interview_result: JSON.stringify(evaluation),
+          interview_result: JSON.stringify(interviewResult),
           shortlisted: evaluation.decision === "selected",
         })
         .eq("id", applicationId);
