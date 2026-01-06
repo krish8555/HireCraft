@@ -76,7 +76,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
   const getTimerColor = () => {
@@ -149,7 +149,9 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
 
       // Wait for metadata to load
       await new Promise<void>((resolve) => {
-        audio.addEventListener("loadedmetadata", () => resolve(), { once: true });
+        audio.addEventListener("loadedmetadata", () => resolve(), {
+          once: true,
+        });
       });
 
       const audioDuration = audio.duration;
@@ -158,7 +160,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
       // Highlight words as they're spoken
       let wordIndex = 0;
       let highlightInterval: NodeJS.Timeout;
-      
+
       audio.onplay = () => {
         highlightInterval = setInterval(() => {
           if (wordIndex < words.length) {
