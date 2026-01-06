@@ -14,48 +14,29 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
   const [questionNumber, setQuestionNumber] = useState(1);
   const [qaHistory, setQaHistory] = useState<QA[]>([]);
   const [loading, setLoading] = useState(false);
-  const [isListening, setIsListening] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [timeLeft, setTimeLeft] = useState(180); // 3 minutes = 180 seconds
+  const [timeLeft, setTimeLeft] = useState(180);
+  const [timerPaused, setTimerPaused] = useState(true);
+  const [highlightedWords, setHighlightedWords] = useState<string[]>([]);
+  const [currentWordIndex, setCurrentWordIndex] = useState(-1);
   const [interviewComplete, setInterviewComplete] = useState(false);
   const [evaluation, setEvaluation] = useState<any>(null);
 
-  const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const router = useRouter();
 
   useEffect(() => {
-    // Initialize speech recognition
-    if (
-      typeof window !== "undefined" &&
-      ("webkitSpeechRecognition" in window || "SpeechRecognition" in window)
-    ) {
-      const SpeechRecognition =
-        (window as any).webkitSpeechRecognition ||
-        (window as any).SpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = "en-US";
-
-      recognitionRef.current.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        setCurrentAnswer((prev) => prev + (prev ? " " : "") + transcript);
-      };
-
-      recognitionRef.current.onend = () => {
-        setIsListening(false);
-      };
-    }
-
-    // Get first question
     getNextQuestion();
   }, []);
 
-  // Timer effect
+  // Timer effect - starts after speech ends
   useEffect(() => {
-    if (loading || interviewComplete) {
+    if (loading || interviewComplete || timerPaused) {
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
@@ -66,7 +47,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timerRef.current!);
-          handleSubmitAnswer(); // Auto-submit when time runs out
+          handleSubmitAnswer();
           return 0;
         }
         return prev - 1;
@@ -78,10 +59,15 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
         clearInterval(timerRef.current);
       }
     };
-  }, [loading, interviewComplete, questionNumber]);
+  }, [loading, interviewComplete, timerPaused, questionNumber]);
+
+  const startTimer = () => {
+    setTimerPaused(false);
+  };
 
   const resetTimer = () => {
-    setTimeLeft(180); // Reset to 3 minutes
+    setTimeLeft(180);
+    setTimerPaused(true);
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
@@ -118,7 +104,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
 
       const data = await response.json();
       setCurrentQuestion(data.question);
-      speakQuestion(data.question);
+      await speakQuestion(data.question);
     } catch (error) {
       console.error("Error getting question:", error);
     } finally {
@@ -126,22 +112,88 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
     }
   };
 
-  const speakQuestion = (text: string) => {
-    if ("speechSynthesis" in window && voiceEnabled) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.rate = 0.9;
-      utterance.pitch = 1;
-      window.speechSynthesis.speak(utterance);
+  const speakQuestion = async (text: string) => {
+    if (!voiceEnabled) {
+      startTimer();
+      return;
+    }
+
+    // Stop any existing audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    try {
+      setIsSpeaking(true);
+      const words = text.split(" ");
+      setHighlightedWords(words);
+      setCurrentWordIndex(-1);
+
+      // Get audio from ElevenLabs
+      const response = await fetch("/api/tts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!response.ok) throw new Error("TTS failed");
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+
+      // Wait for metadata to load
+      await new Promise<void>((resolve) => {
+        audio.addEventListener("loadedmetadata", () => resolve(), { once: true });
+      });
+
+      const audioDuration = audio.duration;
+      const wordDuration = audioDuration / words.length;
+
+      // Highlight words as they're spoken
+      let wordIndex = 0;
+      let highlightInterval: NodeJS.Timeout;
+      
+      audio.onplay = () => {
+        highlightInterval = setInterval(() => {
+          if (wordIndex < words.length) {
+            setCurrentWordIndex(wordIndex);
+            wordIndex++;
+          } else {
+            clearInterval(highlightInterval);
+          }
+        }, wordDuration * 1000);
+      };
+
+      audio.onended = () => {
+        if (highlightInterval) clearInterval(highlightInterval);
+        setIsSpeaking(false);
+        setCurrentWordIndex(-1);
+        startTimer();
+      };
+
+      await audio.play();
+    } catch (error) {
+      console.error("TTS Error:", error);
+      setIsSpeaking(false);
+      startTimer();
     }
   };
 
   const stopSpeaking = () => {
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
     }
+    setIsSpeaking(false);
+    setCurrentWordIndex(-1);
+    if (!timerPaused) return;
+    startTimer();
   };
 
   const toggleVoice = () => {
@@ -151,17 +203,62 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
     setVoiceEnabled(!voiceEnabled);
   };
 
-  const toggleListening = () => {
-    if (!recognitionRef.current) {
-      alert("Speech recognition is not supported in your browser");
-      return;
-    }
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
 
-    if (isListening) {
-      recognitionRef.current.stop();
-    } else {
-      recognitionRef.current.start();
-      setIsListening(true);
+      mediaRecorder.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: "audio/webm",
+        });
+        await transcribeAudio(audioBlob);
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error("Recording error:", error);
+      alert("Could not access microphone");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const transcribeAudio = async (audioBlob: Blob) => {
+    try {
+      setLoading(true);
+      const formData = new FormData();
+      formData.append("audio", audioBlob, "recording.webm");
+
+      const response = await fetch("/api/transcribe", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (data.transcription) {
+        setCurrentAnswer((prev) =>
+          prev ? `${prev} ${data.transcription}` : data.transcription
+        );
+      }
+    } catch (error) {
+      console.error("Transcription error:", error);
+      alert("Failed to transcribe audio");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -204,7 +301,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
 
       const data = await response.json();
       setCurrentQuestion(data.question);
-      speakQuestion(data.question);
+      await speakQuestion(data.question);
     } catch (error) {
       console.error("Error getting question:", error);
     } finally {
@@ -236,7 +333,7 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
           ? `Congratulations! ${data.evaluation.nextSteps}`
           : `Thank you for your time. ${data.evaluation.nextSteps}`;
 
-      speakQuestion(message);
+      await speakQuestion(message);
     } catch (error) {
       console.error("Error evaluating interview:", error);
     } finally {
@@ -339,24 +436,52 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
           </div>
         </div>
 
-        {/* Question */}
+        {/* Question with Word Highlighting */}
         <div className="bg-slate-900/50 backdrop-blur-xl rounded-2xl p-8 border border-slate-700/50 mb-8">
           <div className="flex items-start gap-4 mb-6">
             <div className="text-4xl">{isSpeaking ? "🔊" : "🤖"}</div>
             <div className="flex-1">
-              <h2 className="text-xl font-semibold text-white mb-4">
-                {loading ? "Thinking..." : currentQuestion}
-              </h2>
+              {loading ? (
+                <h2 className="text-xl font-semibold text-white">
+                  Thinking...
+                </h2>
+              ) : (
+                <h2 className="text-xl font-semibold text-white leading-relaxed">
+                  {highlightedWords.map((word, index) => (
+                    <span
+                      key={index}
+                      className={`transition-all duration-200 ${
+                        index === currentWordIndex
+                          ? "text-emerald-400 bg-emerald-400/20 px-1 rounded"
+                          : ""
+                      }`}
+                    >
+                      {word}{" "}
+                    </span>
+                  ))}
+                </h2>
+              )}
             </div>
           </div>
-          
+
           {/* Timer */}
-          {!loading && (
+          {!loading && !timerPaused && (
             <div className="mt-4 flex items-center gap-3">
               <span className="text-slate-400 text-sm">Time Left:</span>
               <span className={`text-2xl font-bold ${getTimerColor()}`}>
                 ⏱️ {formatTime(timeLeft)}
               </span>
+            </div>
+          )}
+
+          {isSpeaking && (
+            <div className="mt-4">
+              <button
+                onClick={stopSpeaking}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm"
+              >
+                Stop Speaking
+              </button>
             </div>
           )}
         </div>
@@ -369,9 +494,9 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
           <textarea
             value={currentAnswer}
             onChange={(e) => setCurrentAnswer(e.target.value)}
-            placeholder="Type your answer here or use voice input..."
+            placeholder="Type your answer here or use voice recording..."
             className="w-full px-4 py-3 bg-slate-800/50 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white min-h-[150px]"
-            disabled={loading}
+            disabled={loading || isRecording}
           />
 
           <div className="flex gap-4 mt-6">
@@ -386,15 +511,15 @@ export default function InterviewPage({ params }: { params: { id: string } }) {
               {voiceEnabled ? "🔊 Voice On" : "🔇 Voice Off"}
             </button>
             <button
-              onClick={toggleListening}
+              onClick={isRecording ? stopRecording : startRecording}
               disabled={loading}
               className={`flex-1 ${
-                isListening
-                  ? "bg-red-600 hover:bg-red-700"
+                isRecording
+                  ? "bg-red-600 hover:bg-red-700 animate-pulse"
                   : "bg-slate-700 hover:bg-slate-600"
               } text-white font-semibold py-4 px-6 rounded-lg transition-all duration-200 disabled:opacity-50`}
             >
-              {isListening ? "🔴 Stop Recording" : "🎤 Voice Input"}
+              {isRecording ? "🔴 Recording..." : "🎙️ Record Answer"}
             </button>
             <button
               onClick={handleSubmitAnswer}
